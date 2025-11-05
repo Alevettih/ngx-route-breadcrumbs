@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+out-tsc/
+*.tsbuildinfo
+
+# Test outputs
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+
+# Misc
+*.min.js
+*.min.css
+
+# Angular
+.angular/
