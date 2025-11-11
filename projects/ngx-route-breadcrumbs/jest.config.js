@@ -1,6 +1,6 @@
 export default {
-  displayName: 'ngx-graphql-client',
-  coverageDirectory: '../../coverage/projects/ngx-graphql-client',
+  displayName: 'ngx-route-breadcrumbs',
+  coverageDirectory: '../../coverage/projects/ngx-route-breadcrumbs',
   transform: {
     '^.+\\.(ts|mjs|js|html)$': [
       'jest-preset-angular',

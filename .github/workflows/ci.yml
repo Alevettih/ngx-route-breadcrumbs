@@ -36,7 +36,7 @@ jobs:
     if: github.event_name == 'release'
     environment:
       name: npm
-      url: https://www.npmjs.com/package/@alevettih/ngx-graphql-client
+      url: https://www.npmjs.com/package/@alevettih/ngx-route-breadcrumbs
     permissions:
       contents: read
     steps:
@@ -57,6 +57,6 @@ jobs:
 
       - name: Publish package
         run: npm publish --access public
-        working-directory: dist/ngx-graphql-client
+        working-directory: dist/ngx-route-breadcrumbs
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
