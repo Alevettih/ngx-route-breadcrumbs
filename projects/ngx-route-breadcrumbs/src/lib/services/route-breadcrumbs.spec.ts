@@ -110,7 +110,7 @@ describe('RouteBreadcrumbsService', (): void => {
 
       await router.navigateByUrl('/home/1/last');
 
-      expect(service.getBack(service.items())).toEqual(breadcrumbs[1]);
+      expect(service.backItem()).toEqual(breadcrumbs[1]);
     });
 
     it('should return the first breadcrumb if there is no second to last breadcrumb', async (): Promise<void> => {
@@ -118,7 +118,7 @@ describe('RouteBreadcrumbsService', (): void => {
 
       await router.navigateByUrl('/home');
 
-      expect(service.getBack(service.items())).toEqual(breadcrumbs[0]);
+      expect(service.backItem()).toEqual(breadcrumbs[0]);
     });
 
     it('should return undefined if there are no breadcrumbs', async (): Promise<void> => {
@@ -126,7 +126,7 @@ describe('RouteBreadcrumbsService', (): void => {
 
       await router.navigateByUrl('/');
 
-      expect(service.getBack(service.items())).toBeUndefined();
+      expect(service.backItem()).toBeUndefined();
     });
   });
 
