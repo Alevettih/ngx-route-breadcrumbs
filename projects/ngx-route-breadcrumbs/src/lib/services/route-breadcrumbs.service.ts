@@ -44,6 +44,17 @@ export class RouteBreadcrumbsService {
     }),
   );
 
+  public readonly backItem = computed((): RouteBreadcrumb | undefined => {
+    const breadcrumbs: RouteBreadcrumb[] = this.items();
+    /**
+     * Generic helper that returns the breadcrumb used for "Back" button behavior.
+     *
+     * Chooses the penultimate breadcrumb (or the first one if the penultimate entry does not exist)
+     * and relies on its link for navigation.
+     */
+    return breadcrumbs.at(-2) ?? breadcrumbs.at(0);
+  });
+
   constructor() {
     this.activationEnd$
       .pipe(
@@ -83,16 +94,6 @@ export class RouteBreadcrumbsService {
         this.removeMutation(item.index);
       }
     });
-  }
-
-  public getBack(breadcrumbs: RouteBreadcrumb[]): RouteBreadcrumb | undefined {
-    /**
-     * Generic helper that returns the breadcrumb used for "Back" button behavior.
-     *
-     * Chooses the penultimate breadcrumb (or the first one if the penultimate entry does not exist)
-     * and relies on its link for navigation.
-     */
-    return breadcrumbs.at(-2) ?? breadcrumbs.at(0);
   }
 
   private getBreadcrumbParams(

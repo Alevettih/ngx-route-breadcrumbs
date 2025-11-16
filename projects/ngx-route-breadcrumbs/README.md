@@ -199,8 +199,8 @@ export class TestComponent {
 | Method                                                                         | Description                                                                                                                      |
 | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
 | `items(): Signal<RouteBreadcrumb[]>`                                           | Computed signal that combines router-derived breadcrumbs with temporary overrides.                                               |
+| `backItem(): Signal<RouteBreadcrumb \| undefined>`                             | Computed signal that returns a breadcrumb suited for “Back” navigation (the penultimate item, or the first if only one exists).  |
 | `extend(params: RouteBreadcrumbsExtendFnParams, destroyRef: DestroyRef): void` | Adds items from `params.add`, applies patches from `params.patch`, and automatically rolls back changes when `destroyRef` fires. |
-| `getBack(breadcrumbs: RouteBreadcrumb[]): RouteBreadcrumb \| undefined`        | Returns the breadcrumb suited for “Back” navigation (the penultimate item, or the first if only one exists).                     |
 
 ### Helpers
 
