@@ -31,9 +31,9 @@
           }
         },
         "test": {
-          "builder": "@angular-builders/jest:run",
+          "builder": "@angular/build:unit-test",
           "options": {
-            "silent": true
+            "watch": false
           }
         }
       }
