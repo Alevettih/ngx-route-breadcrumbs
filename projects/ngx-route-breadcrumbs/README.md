@@ -10,9 +10,9 @@ npm install @alevettih/ngx-route-breadcrumbs
 
 ### Requirements
 
-- Angular 18.0.0 or later
-- RxJS 7.8.0 or later
-- es-toolkit 1.41.0 or later
+- Angular 18+
+- RxJS 7.8+
+- es-toolkit 1.41+
 
 ## Features
 

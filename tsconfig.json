@@ -3,10 +3,12 @@
 {
   "compileOnSave": false,
   "compilerOptions": {
+    "esModuleInterop": true,
     "strict": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
     "noImplicitReturns": true,
+    "moduleResolution": "bundler",
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
     "isolatedModules": true,
@@ -32,7 +34,7 @@
       "path": "./projects/ngx-route-breadcrumbs/tsconfig.lib.json"
     },
     {
-      "path": "./tsconfig.spec.json"
+      "path": "./projects/ngx-route-breadcrumbs/tsconfig.spec.json"
     }
   ]
 }

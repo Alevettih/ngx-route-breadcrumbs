@@ -4,10 +4,10 @@ import {
   DestroyRef,
   inject,
 } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router, provideRouter } from '@angular/router';
+import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router, RouterOutlet, provideRouter } from '@angular/router';
 
-import { RouteBreadcrumbConfig, RouteBreadcrumb } from '../models';
+import { type RouteBreadcrumbConfig, type RouteBreadcrumb } from '../models';
 
 import { RouteBreadcrumbsService } from './route-breadcrumbs.service';
 
@@ -15,6 +15,7 @@ import { RouteBreadcrumbsService } from './route-breadcrumbs.service';
   selector: 'test-outlet-component',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: '<router-outlet />',
+  imports: [RouterOutlet],
 })
 class TestOutletComponent {
   public breadcrumbs = inject(RouteBreadcrumbsService);
