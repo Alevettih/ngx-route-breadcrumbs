@@ -5,7 +5,7 @@ import {
   Injectable,
   signal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRouteSnapshot, Router, UrlSegment } from '@angular/router';
 import { cloneDeep, merge, omit, omitBy, toMerged } from 'es-toolkit';
 import { buffer, filter, map } from 'rxjs';
@@ -22,26 +22,35 @@ import { RouteBreadcrumbMeta } from '../types';
 export class RouteBreadcrumbsService {
   private readonly router = inject(Router);
 
+  private readonly navigationEnd$ = this.router.events.pipe(
+    filter(isNavigationEnd),
+    takeUntilDestroyed(),
+  );
+  private readonly activationEnd$ = this.router.events.pipe(
+    filter(isActivationEnd),
+    takeUntilDestroyed(),
+  );
   private readonly additional = signal<RouteBreadcrumb[]>([]);
-  private readonly base = signal<RouteBreadcrumb[]>([]);
+  private readonly base = computed<RouteBreadcrumb[]>(() =>
+    this.getCollection(this.snapshots() ?? []),
+  );
   private readonly unMutated = computed((): RouteBreadcrumb[] =>
     cloneDeep([...this.base(), ...this.additional()]),
   );
-  private readonly mutations = signal<Record<string, RouteBreadcrumb>>({});
-
-  private readonly navigationEnd$ = this.router.events.pipe(
-    takeUntilDestroyed(),
-    filter(isNavigationEnd),
-  );
-  private readonly activationEnd$ = this.router.events.pipe(
-    takeUntilDestroyed(),
-    filter(isActivationEnd),
+  private readonly mutations = signal<Record<number, RouteBreadcrumb>>({});
+  private readonly snapshots = toSignal(
+    this.activationEnd$.pipe(
+      map(({ snapshot }): ActivatedRouteSnapshot => snapshot),
+      buffer(this.navigationEnd$),
+      map((snapshots): ActivatedRouteSnapshot[] => snapshots.reverse()),
+    ),
   );
 
   public readonly items = computed((): RouteBreadcrumb[] =>
-    this.unMutated().map((item: RouteBreadcrumb): RouteBreadcrumb => {
-      return this.mutations()[item.key] ?? item;
-    }),
+    this.unMutated().map(
+      (item: RouteBreadcrumb, index: number): RouteBreadcrumb =>
+        this.mutations()[index] ?? item,
+    ),
   );
 
   public readonly backItem = computed((): RouteBreadcrumb | undefined => {
@@ -54,18 +63,6 @@ export class RouteBreadcrumbsService {
      */
     return breadcrumbs.at(-2) ?? breadcrumbs.at(0);
   });
-
-  constructor() {
-    this.activationEnd$
-      .pipe(
-        map(({ snapshot }): ActivatedRouteSnapshot => snapshot),
-        buffer(this.navigationEnd$),
-        map((snapshots): ActivatedRouteSnapshot[] => snapshots.reverse()),
-      )
-      .subscribe((snapshots: ActivatedRouteSnapshot[]): void => {
-        this.base.set(this.getCollection(snapshots));
-      });
-  }
 
   /**
    * Manipulates the breadcrumb list; any changes are rolled back when the component
@@ -154,11 +151,10 @@ export class RouteBreadcrumbsService {
 
   private prepareBreadcrumbs(
     rootAcc: RouteBreadcrumb[],
-    { data, pathFromRoot }: ActivatedRouteSnapshot,
+    { data, pathFromRoot, routeConfig, url }: ActivatedRouteSnapshot,
     _index: number,
     snapshots: ActivatedRouteSnapshot[],
   ): RouteBreadcrumb[] {
-    let breadcrumb: RouteBreadcrumb | undefined;
     const config = data['breadcrumb'] as RouteBreadcrumbConfig | undefined;
     const meta: RouteBreadcrumbMeta = snapshots.reduce(
       (acc, snapshot): RouteBreadcrumbMeta =>
@@ -168,23 +164,60 @@ export class RouteBreadcrumbsService {
       {},
     );
 
-    if (
-      config?.['key'] &&
-      !rootAcc.some(
-        (item: RouteBreadcrumb): boolean => config['key'] === item.key,
-      )
-    ) {
-      const link = `/${this.getLink(meta, pathFromRoot)}`;
-
-      breadcrumb = {
-        key: config['key'],
-        icon: config['icon'],
-        link: config.transformLink?.(link, meta) ?? link,
-        params: this.getBreadcrumbParams(config, meta),
-      };
+    if (!config?.['key']) {
+      return [...rootAcc];
     }
 
-    return breadcrumb ? [...rootAcc, breadcrumb] : [...rootAcc];
+    const links = this.getBreadcrumbLinks(meta, pathFromRoot, url, routeConfig);
+
+    return links.reduce(
+      (acc: RouteBreadcrumb[], link: string): RouteBreadcrumb[] => {
+        if (
+          acc.some(
+            (item: RouteBreadcrumb): boolean =>
+              item.key === config['key'] && item.link === link,
+          )
+        ) {
+          return acc;
+        }
+
+        const breadcrumb: RouteBreadcrumb = {
+          key: config['key'],
+          icon: config['icon'],
+          link: config.transformLink?.(link, meta) ?? link,
+          params: this.getBreadcrumbParams(config, meta),
+        };
+
+        return [...acc, breadcrumb];
+      },
+      rootAcc,
+    );
+  }
+
+  private getBreadcrumbLinks(
+    data: RouteBreadcrumbMeta,
+    pathFromRoot: ActivatedRouteSnapshot[],
+    url: UrlSegment[],
+    routeConfig: ActivatedRouteSnapshot['routeConfig'],
+  ): string[] {
+    const link = `/${this.getLink(data, pathFromRoot)}`;
+
+    if (!routeConfig?.matcher || url.length <= 1) {
+      return [link];
+    }
+
+    const parentLink = `/${this.getLink(data, pathFromRoot.slice(0, -1))}`;
+
+    return url.map((_: UrlSegment, index: number): string => {
+      const childLink = url
+        .slice(0, index + 1)
+        .map((segment: UrlSegment): string =>
+          this.getDynamicItem(data, segment.toString()),
+        )
+        .join('/');
+
+      return `${parentLink}/${childLink}`;
+    });
   }
 
   private add(breadcrumb: RouteBreadcrumb): void {
@@ -201,15 +234,17 @@ export class RouteBreadcrumbsService {
   }
 
   private addMutation(index: number, breadcrumb: RouteBreadcrumb): void {
-    const item = this.unMutated().at(index);
+    const items = this.unMutated();
+    const normalizedIndex = index < 0 ? items.length + index : index;
+    const item = items.at(index);
 
-    if (item?.key) {
+    if (item) {
       this.mutations.update(
         (
           breadcrumbsMap: Record<string, RouteBreadcrumb>,
         ): Record<string, RouteBreadcrumb> => ({
           ...breadcrumbsMap,
-          [item.key]: {
+          [normalizedIndex]: {
             ...item,
             ...omitBy(
               breadcrumb,
@@ -222,13 +257,15 @@ export class RouteBreadcrumbsService {
   }
 
   private removeMutation(index: number): void {
-    const key = this.unMutated().at(index)?.key;
+    const items = this.unMutated();
+    const normalizedIndex = index < 0 ? items.length + index : index;
 
-    if (key) {
+    if (items.at(index)) {
       this.mutations.update(
         (
           breadcrumbsMap: Record<string, RouteBreadcrumb>,
-        ): Record<string, RouteBreadcrumb> => omit(breadcrumbsMap, [key]),
+        ): Record<string, RouteBreadcrumb> =>
+          omit(breadcrumbsMap, [normalizedIndex.toString()]),
       );
     }
   }

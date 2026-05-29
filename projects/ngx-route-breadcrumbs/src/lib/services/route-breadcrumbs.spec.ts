@@ -5,11 +5,27 @@ import {
   inject,
 } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router, RouterOutlet, provideRouter } from '@angular/router';
+import {
+  Router,
+  RouterOutlet,
+  provideRouter,
+  UrlSegment,
+  UrlMatchResult,
+} from '@angular/router';
 
 import { type RouteBreadcrumbConfig, type RouteBreadcrumb } from '../models';
 
 import { RouteBreadcrumbsService } from './route-breadcrumbs.service';
+
+export function recursiveMatcher(
+  segments: UrlSegment[],
+): UrlMatchResult | null {
+  if (segments.length === 0) {
+    return null;
+  }
+
+  return { consumed: segments };
+}
 
 @Component({
   selector: 'test-outlet-component',
@@ -58,6 +74,73 @@ describe('RouteBreadcrumbsService', (): void => {
             data: { breadcrumb: <RouteBreadcrumbConfig>{ key: 'Home' } },
             children: [
               {
+                path: 'without-key',
+                component: TestComponent,
+                data: {
+                  breadcrumb: <RouteBreadcrumbConfig>{ icon: 'hidden' },
+                },
+              },
+              {
+                path: 'with-icon',
+                component: TestComponent,
+                data: {
+                  breadcrumb: <RouteBreadcrumbConfig>{
+                    key: 'WithIcon',
+                    icon: 'home',
+                  },
+                },
+              },
+              {
+                path: 'transformed-link',
+                component: TestComponent,
+                data: {
+                  entity: { id: '42' },
+                  breadcrumb: <RouteBreadcrumbConfig>{
+                    key: 'TransformedLink',
+                    transformLink: (link, meta): string =>
+                      `${link}?entityId=${(meta['entity'] as Record<string, string>)['id']}`,
+                  },
+                },
+              },
+              {
+                path: 'static-params',
+                component: TestComponent,
+                data: {
+                  breadcrumb: <RouteBreadcrumbConfig>{
+                    key: 'StaticParams',
+                    params: { label: 'plain text' },
+                  },
+                },
+              },
+              {
+                path: ':dynamicPath',
+                component: TestComponent,
+                data: {
+                  dynamicPath: 'resolved-path',
+                  breadcrumb: <RouteBreadcrumbConfig>{
+                    key: 'DynamicPath',
+                  },
+                },
+              },
+              {
+                path: 'recursive',
+                component: TestOutletComponent,
+                data: {
+                  breadcrumb: <RouteBreadcrumbConfig>{ key: 'Recursive' },
+                },
+                children: [
+                  {
+                    matcher: recursiveMatcher,
+                    component: TestComponent,
+                    data: {
+                      breadcrumb: <RouteBreadcrumbConfig>{
+                        key: 'RecursiveChild',
+                      },
+                    },
+                  },
+                ],
+              },
+              {
                 path: ':id',
                 component: TestOutletComponent,
                 data: {
@@ -105,6 +188,71 @@ describe('RouteBreadcrumbsService', (): void => {
     expect(service.items()).toEqual(breadcrumbs);
   });
 
+  it('should get recursive breadcrumbs', async (): Promise<void> => {
+    const { service, router } = await setup();
+
+    await router.navigateByUrl('/home/recursive/a/b/c/d/e/f');
+
+    expect(service.items()).toEqual([
+      { key: 'Home', link: '/home' },
+      { key: 'Recursive', link: '/home/recursive' },
+      { key: 'RecursiveChild', link: '/home/recursive/a' },
+      { key: 'RecursiveChild', link: '/home/recursive/a/b' },
+      { key: 'RecursiveChild', link: '/home/recursive/a/b/c' },
+      { key: 'RecursiveChild', link: '/home/recursive/a/b/c/d' },
+      { key: 'RecursiveChild', link: '/home/recursive/a/b/c/d/e' },
+      { key: 'RecursiveChild', link: '/home/recursive/a/b/c/d/e/f' },
+    ]);
+  });
+
+  it('should skip breadcrumb config without key', async (): Promise<void> => {
+    const { service, router } = await setup();
+
+    await router.navigateByUrl('/home/without-key');
+
+    expect(service.items()).toEqual([{ key: 'Home', link: '/home' }]);
+  });
+
+  it('should include breadcrumb icon', async (): Promise<void> => {
+    const { service, router } = await setup();
+
+    await router.navigateByUrl('/home/with-icon');
+
+    expect(service.items()).toEqual([
+      { key: 'Home', link: '/home' },
+      { key: 'WithIcon', icon: 'home', link: '/home/with-icon' },
+    ]);
+  });
+
+  it('should transform breadcrumb link using route meta', async (): Promise<void> => {
+    const { service, router } = await setup();
+
+    await router.navigateByUrl('/home/transformed-link');
+
+    expect(service.items()).toEqual([
+      { key: 'Home', link: '/home' },
+      {
+        key: 'TransformedLink',
+        link: '/home/transformed-link?entityId=42',
+      },
+    ]);
+  });
+
+  it('should keep static breadcrumb params as is', async (): Promise<void> => {
+    const { service, router } = await setup();
+
+    await router.navigateByUrl('/home/static-params');
+
+    expect(service.items()).toEqual([
+      { key: 'Home', link: '/home' },
+      {
+        key: 'StaticParams',
+        link: '/home/static-params',
+        params: { label: 'plain text' },
+      },
+    ]);
+  });
+
   describe('back', (): void => {
     it('should return the second to last breadcrumb if it exists', async (): Promise<void> => {
       const { service, router, breadcrumbs } = await setup();
@@ -132,7 +280,7 @@ describe('RouteBreadcrumbsService', (): void => {
   });
 
   describe('extend', (): void => {
-    it('should add and update items in the breadcrumbs collection and remove this changes on component destroy', async (): Promise<void> => {
+    it('should apply add and negative-index patch together and rollback both on component destroy', async (): Promise<void> => {
       const { service, fixture, router, breadcrumbs } = await setup();
 
       const breadcrumbToAdd = { key: 'Additional Item' };
@@ -158,6 +306,149 @@ describe('RouteBreadcrumbsService', (): void => {
       fixture.destroy();
 
       expect(service.items().length).toEqual(3);
+      expect(service.items()).toEqual(breadcrumbs);
+    });
+
+    it('should add items without patching and remove them on component destroy', async (): Promise<void> => {
+      const { service, fixture, router, breadcrumbs } = await setup();
+
+      const firstBreadcrumbToAdd = { key: 'Additional First' };
+      const secondBreadcrumbToAdd = {
+        key: 'Additional Second',
+        link: '/additional-second',
+      };
+
+      await router.navigateByUrl('/home/1/last');
+
+      service.extend(
+        {
+          add: [firstBreadcrumbToAdd, secondBreadcrumbToAdd],
+        },
+        fixture.componentInstance.destroyRef,
+      );
+
+      expect(service.items()).toEqual([
+        ...breadcrumbs,
+        firstBreadcrumbToAdd,
+        secondBreadcrumbToAdd,
+      ]);
+
+      fixture.destroy();
+
+      expect(service.items()).toEqual(breadcrumbs);
+    });
+
+    it('should patch item by positive index and remove patch on component destroy', async (): Promise<void> => {
+      const { service, fixture, router, breadcrumbs } = await setup();
+
+      await router.navigateByUrl('/home/1/last');
+
+      service.extend(
+        {
+          patch: [
+            {
+              index: 1,
+              key: 'Patched First',
+              link: '/patched-first',
+            },
+          ],
+        },
+        fixture.componentInstance.destroyRef,
+      );
+
+      expect(service.items()).toEqual([
+        breadcrumbs[0],
+        {
+          ...breadcrumbs[1],
+          key: 'Patched First',
+          link: '/patched-first',
+        },
+        breadcrumbs[2],
+      ]);
+
+      fixture.destroy();
+
+      expect(service.items()).toEqual(breadcrumbs);
+    });
+
+    it('should ignore patch for non-existing index', async (): Promise<void> => {
+      const { service, fixture, router, breadcrumbs } = await setup();
+
+      await router.navigateByUrl('/home/1/last');
+
+      service.extend(
+        {
+          patch: [{ index: 10, key: 'Out of bounds' }],
+        },
+        fixture.componentInstance.destroyRef,
+      );
+
+      expect(service.items()).toEqual(breadcrumbs);
+
+      fixture.destroy();
+
+      expect(service.items()).toEqual(breadcrumbs);
+    });
+
+    it('should not overwrite existing breadcrumb fields with undefined patch values', async (): Promise<void> => {
+      const { service, fixture, router, breadcrumbs } = await setup();
+
+      await router.navigateByUrl('/home/1/last');
+
+      service.extend(
+        {
+          patch: [
+            {
+              index: 1,
+              key: undefined,
+              link: '/patched-link',
+            },
+          ],
+        },
+        fixture.componentInstance.destroyRef,
+      );
+
+      expect(service.items()[1]).toEqual({
+        ...breadcrumbs[1],
+        link: '/patched-link',
+      });
+
+      fixture.destroy();
+
+      expect(service.items()).toEqual(breadcrumbs);
+    });
+
+    it('should remove all added items with the same key on component destroy', async (): Promise<void> => {
+      const { service, fixture, router, breadcrumbs } = await setup();
+
+      const duplicateKeyBreadcrumb = { key: 'Duplicate' };
+
+      await router.navigateByUrl('/home/1/last');
+
+      service.extend(
+        {
+          add: [
+            duplicateKeyBreadcrumb,
+            {
+              ...duplicateKeyBreadcrumb,
+              link: '/duplicate',
+            },
+          ],
+        },
+        fixture.componentInstance.destroyRef,
+      );
+
+      expect(service.items()).toEqual([
+        ...breadcrumbs,
+        duplicateKeyBreadcrumb,
+        {
+          ...duplicateKeyBreadcrumb,
+          link: '/duplicate',
+        },
+      ]);
+
+      fixture.destroy();
+
       expect(service.items()).toEqual(breadcrumbs);
     });
   });
